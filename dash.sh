@@ -129,15 +129,8 @@ for f in $TARGET_FILES; do
     rm "${subtitle}"
 
     # append subtitle node to DASH mpd file
-    xml ed --inplace -P -O \
-      -s "//MPD/Period" -t elem -n "AdaptationSet" \
-      -s "//MPD/Period/AdaptationSet[last()]" -t attr -n "mimeType" -v "text/vtt" \
-      -s "//MPD/Period/AdaptationSet[last()]" -t attr -n 'lang' -v "${SUB_LANG}" \
-      -s "//MPD/Period/AdaptationSet[last()]" -t elem -n "Representation" \
-      -s "//MPD/Period/AdaptationSet/Representation[last()]" -t attr -n "caption_${SUB_LANG}" -v "text/vtt" \
-      -s "//MPD/Period/AdaptationSet/Representation[last()]" -t attr -n "bandwidth" -v "256" \
-      -s "//MPD/Period/AdaptationSet/Representation[last()]" -t elem -n "BaseURL" -v "${SUBTITLES_DIR}/${FILE_NAME}_${SUB_LANG}.vtt" \
-      "${DASH_DIR}/${FILE_NAME}.mpd"
+    APPEND="<AdaptationSet mimeType=\"text\/vtt\" lang=\"${SUB_LANG}\"><Representation id=\"caption_${SUB_LANG}\" bandwidth=\"256\"><BaseURL>${SUBTITLES_DIR}/${FILE_NAME}_${SUB_LANG}.vtt<\/BaseURL><\/Representation><\/AdaptationSet>"
+    sed -i "/<\/Period>/i $APPEND" "${DASH_DIR}/${FILE_NAME}.mpd"
   done
 
   # if preview sprite generated, move DASH to processed directory and increase counter
