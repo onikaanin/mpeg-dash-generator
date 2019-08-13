@@ -8,7 +8,8 @@
 # AddType video/mp4 m4s
 # AddType application/dash+xml mpd
 
-MYDIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+# BASH_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+MOVIE_DIR=$(pwd)
 THUMBS_DIR="thumbs"
 QUEUE_DIR="queue"
 PROCESSED_DIR="processed"
@@ -32,12 +33,12 @@ if [ -z "$(which montage)" ]; then
   exit 1
 fi
 
-if [ -z "$(which xmlstarlet)" ]; then
-  echo "Error: xmlstarlet is not installed"
+if [ -z "$(which sed)" ]; then
+  echo "Error: sed is not installed"
   exit 1
 fi
 
-cd "$MYDIR" || exit
+cd "$MOVIE_DIR" || exit
 
 # check directories
 if [ ! -d "${PROCESSED_DIR}" ]; then
@@ -87,16 +88,17 @@ for f in $TARGET_FILES; do
     ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 1500k -bufsize 3000k -pix_fmt yuv420p -vf "scale=-2:1080" -f mp4 "${FILE_NAME}_1080.mp4"
     ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 800k -bufsize 2000k -pix_fmt yuv420p -vf "scale=-2:720" -f mp4 "${FILE_NAME}_720.mp4"
     ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 400k -bufsize 1000k -pix_fmt yuv420p -vf "scale=-2:480" -f mp4 "${FILE_NAME}_480.mp4"
+    ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 200k -bufsize 500k -pix_fmt yuv420p -vf "scale=-2:360" -f mp4 "${FILE_NAME}_360.mp4"
     # static file for ios and old browsers and mobile safari
     # ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -movflags +faststart -vsync passthrough -write_tmcd 0 -c:a aac -b:a 160k -c:v libx264 -crf 23 -maxrate 2000k -bufsize 4000k -pix_fmt yuv420p -f mp4 "${DASH_DIR}/${FILE_NAME}.mp4"
 
     # if audio stream does not exist, ignore it
     if [ -e "${FILE_NAME}_audio.m4a" ]; then
-      MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_audio.m4a" -out "${DASH_DIR}/${FILE_NAME}.mpd"
-      rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_audio.m4a"
+      MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" "${FILE_NAME}_audio.m4a" -out "${DASH_DIR}/${FILE_NAME}.mpd"
+      rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" "${FILE_NAME}_audio.m4a"
     else
-      MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" -out "${DASH_DIR}/${FILE_NAME}.mpd"
-      rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4"
+      MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" -out "${DASH_DIR}/${FILE_NAME}.mpd"
+      rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4"
     fi
   fi
 
@@ -134,10 +136,12 @@ for f in $TARGET_FILES; do
   done
 
   # if preview sprite generated, move DASH to processed directory and increase counter
-  #if [ -f "${DASH_DIR}/${THUMBS_DIR}/preview.jpg" ]; then
+  if [ -f "${DASH_DIR}/${THUMBS_DIR}/preview.jpg" ]; then
     mv "${DASH_DIR}" "${PROCESSED_DIR}/${SAVE_DIR}"
     mv "${MP4}" "${PROCESSED_DIR}/${SAVE_DIR}"
     COUNTER=$((COUNTER + 1))
     echo ${COUNTER} >"${COUNTER_FILE}"
-  #fi
+  fi
+
+  # TODO: CURL SERVICE TO INSERT MOVIE INTO DATABASE
 done
