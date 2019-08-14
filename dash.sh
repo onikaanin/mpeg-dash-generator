@@ -13,9 +13,11 @@ MOVIE_DIR=$(pwd)
 THUMBS_DIR="thumbs"
 QUEUE_DIR="queue"
 PROCESSED_DIR="processed"
+REPORTED_DIR="reported"
 DIR_CHUNK=1000
 COUNTER_FILE="counter.txt"
 SUBTITLES_DIR="subtitles"
+REPORTING_URL="http://127.0.0.1:8000/api/v1/video"
 
 # check programs
 if [ -z "$(which ffmpeg)" ]; then
@@ -38,6 +40,11 @@ if [ -z "$(which sed)" ]; then
   exit 1
 fi
 
+if [ -z "$(which curl)" ]; then
+  echo "Error: curl is not installed"
+  exit 1
+fi
+
 cd "$MOVIE_DIR" || exit
 
 # check directories
@@ -45,28 +52,32 @@ if [ ! -d "${PROCESSED_DIR}" ]; then
   mkdir "${PROCESSED_DIR}"
 fi
 
+if [ ! -d "${REPORTED_DIR}" ]; then
+  mkdir "${REPORTED_DIR}"
+fi
+
 if [ ! -d "${QUEUE_DIR}" ]; then
   mkdir "${QUEUE_DIR}"
 fi
 
-if [ -f "${COUNTER_FILE}" ]; then
-  COUNTER=$(<"${COUNTER_FILE}")
-  SAVE_DIR=$(($((COUNTER / DIR_CHUNK)) + 1))
-else
+if [ ! -f "${COUNTER_FILE}" ]; then
   echo 0 >"${COUNTER_FILE}"
   COUNTER=0
   SAVE_DIR="1"
-fi
-
-if [ ! -d "${PROCESSED_DIR}/${SAVE_DIR}" ]; then
-  mkdir "${PROCESSED_DIR}/${SAVE_DIR}"
 fi
 
 # find mp4 files
 TARGET_FILES=$(find ./ -maxdepth 1 -type f \( -name "*.mp4" \))
 
 for f in $TARGET_FILES; do
-  ORIGINAL_FILE_FULL_NAME=$(basename "$f") # fullname of the file
+  COUNTER=$(<"${COUNTER_FILE}")
+  SAVE_DIR=$(($((COUNTER / DIR_CHUNK)) + 1))
+
+  if [ ! -d "${REPORTED_DIR}/${SAVE_DIR}" ]; then
+    mkdir "${REPORTED_DIR}/${SAVE_DIR}"
+  fi
+
+  ORIGINAL_FILE_FULL_NAME=$(basename "$f")           # fullname of the file
   ORIGINAL_FILE_NAME="${ORIGINAL_FILE_FULL_NAME%.*}" # name without extension
 
   FILE_NAME=$((COUNTER + 1))
@@ -137,11 +148,22 @@ for f in $TARGET_FILES; do
 
   # if preview sprite generated, move DASH to processed directory and increase counter
   if [ -f "${DASH_DIR}/${THUMBS_DIR}/preview.jpg" ]; then
-    mv "${DASH_DIR}" "${PROCESSED_DIR}/${SAVE_DIR}"
-    mv "${MP4}" "${PROCESSED_DIR}/${SAVE_DIR}"
+    mv "${DASH_DIR}" "${PROCESSED_DIR}"
+    mv "${MP4}" "${PROCESSED_DIR}"
+    #    rm "${MP4}"
     COUNTER=$((COUNTER + 1))
     echo ${COUNTER} >"${COUNTER_FILE}"
-  fi
 
-  # TODO: CURL SERVICE TO INSERT MOVIE INTO DATABASE
+    # curl service to insert movie into database
+    STATUS=$(curl -i -X POST \
+      -F "name=${FILE_NAME}" -F "info=@${PROCESSED_DIR}/${FILE_NAME}/info.txt" \
+      --url $REPORTING_URL \
+      --output "${PROCESSED_DIR}/${FILE_NAME}/response.txt" -w "%{http_code}")
+
+    # if response header code is 201, move to reported directory
+    if [ "$STATUS" -eq 201 ]; then
+      mv "${PROCESSED_DIR}/${FILE_NAME}" "${REPORTED_DIR}/${SAVE_DIR}"
+      mv "${PROCESSED_DIR}/${FILE_NAME}.mp4" "${REPORTED_DIR}/${SAVE_DIR}"
+    fi
+  fi
 done
