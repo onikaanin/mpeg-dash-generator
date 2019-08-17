@@ -91,18 +91,18 @@ for f in ${TARGET_FILES}; do
     AUDIO_CHANNELS=$(ffmpeg -i "${MP4}" 2>&1 | grep Audio | wc -l)
     AUDIO_FILES=""
 
-    for (( i=1; i<=AUDIO_CHANNELS; i++ ))
-    do
-        ffmpeg -y -i "${MP4}" -map "0:${i}" -c:a aac -b:a 192k -vn "${FILE_NAME}_audio_$i.m4a"
-        AUDIO_FILES+="${FILE_NAME}_audio_$i.m4a "
+    for ((i = 1; i <= AUDIO_CHANNELS; i++)); do
+      ffmpeg -y -i "${MP4}" -map "0:${i}" -c:a aac -ar 48000 -b:a 128k -vn "${FILE_NAME}_audio_$i.m4a"
+      AUDIO_FILES+="${FILE_NAME}_audio_$i.m4a "
     done
 
-    ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 1500k -bufsize 3000k -pix_fmt yuv420p -vf "scale=-2:1080" -f mp4 "${FILE_NAME}_1080.mp4"
-    ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 800k -bufsize 2000k -pix_fmt yuv420p -vf "scale=-2:720" -f mp4 "${FILE_NAME}_720.mp4"
-    ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 400k -bufsize 1000k -pix_fmt yuv420p -vf "scale=-2:480" -f mp4 "${FILE_NAME}_480.mp4"
-    ffmpeg -y -i "${MP4}" -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 200k -bufsize 500k -pix_fmt yuv420p -vf "scale=-2:360" -f mp4 "${FILE_NAME}_360.mp4"
+    ffmpeg -hide_banner -y -i "${MP4}" \
+      -vf "scale=-2:360" -an -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -b:v 800k -maxrate 856k -bufsize 1200k -f mp4 "${FILE_NAME}_360.mp4" \
+      -vf "scale=-2:480" -an -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -b:v 1400k -maxrate 1498k -bufsize 2100k -f mp4 "${FILE_NAME}_480.mp4" \
+      -vf "scale=-2:720" -an -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -b:v 2800k -maxrate 2996k -bufsize 4200k -f mp4 "${FILE_NAME}_720.mp4" \
+      -vf "scale=-2:1080" -an -c:v h264 -profile:v main -crf 20 -sc_threshold 0 -g 48 -keyint_min 48 -b:v 5000k -maxrate 5350k -bufsize 7500k -f mp4 "${FILE_NAME}_1080.mp4"
 
-    MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES} -out "${DASH_DIR}/${FILE_NAME}.mpd"
+    MP4Box -dash 2000 -bs-switching multi -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES} -out "${DASH_DIR}/${FILE_NAME}.mpd"
     rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES}
   fi
 
@@ -147,16 +147,19 @@ for f in ${TARGET_FILES}; do
     COUNTER=$((COUNTER + 1))
     echo ${COUNTER} >"${COUNTER_FILE}"
 
-     # curl service to insert movie into database
-     STATUS=$(curl -i -X POST \
-       -F "name=${FILE_NAME}" -F "info=@${PROCESSED_DIR}/${FILE_NAME}/info.txt" \
-       --url ${REPORTING_URL} \
-       --output "${PROCESSED_DIR}/${FILE_NAME}/response.txt" -w "%{http_code}")
+    # curl service to insert movie into database
+    STATUS=$(curl -i -X POST \
+      -F "name=${FILE_NAME}" \
+      -F "manifest=${SAVE_DIR}/${FILE_NAME}/${FILE_NAME}.mpd" \
+      -F "preview=${SAVE_DIR}/${FILE_NAME}/${THUMBS_DIR}/preview.jpg" \
+      -F "info=@${PROCESSED_DIR}/${FILE_NAME}/info.txt" \
+      --url ${REPORTING_URL} \
+      --output "${PROCESSED_DIR}/${FILE_NAME}/response.txt" -w "%{http_code}")
 
-     # if response header code is 201, move to reported directory
-     if [[ "$STATUS" -eq 201 ]]; then
-       mv "${PROCESSED_DIR}/${FILE_NAME}" "${REPORTED_DIR}/${SAVE_DIR}"
-       mv "${PROCESSED_DIR}/${FILE_NAME}.mp4" "${REPORTED_DIR}/${SAVE_DIR}"
-     fi
+    # if response header code is 201, move to reported directory
+    if [[ "$STATUS" -eq 201 ]]; then
+      mv "${PROCESSED_DIR}/${FILE_NAME}" "${REPORTED_DIR}/${SAVE_DIR}"
+      mv "${PROCESSED_DIR}/${FILE_NAME}.mp4" "${REPORTED_DIR}/${SAVE_DIR}"
+    fi
   fi
 done
