@@ -7,7 +7,7 @@ Also, make thumbnails for every mp4 files that previously converted to dash play
 # Requirement
 * ffmpeg
 * gpac
-* montage
+* imagemagick
 * sed
 * curl
 
@@ -16,7 +16,7 @@ Also, make thumbnails for every mp4 files that previously converted to dash play
 `sudo apt install ffmpeg gpac montage sed curl`
 
 # Convert to Dash-MPEG
-**<p>First make bash scrip executable:</p>**
+**<p>First make bash script executable:</p>**
 `$ sudo chmod +x dash.sh`
 
 **<p>Then run the script: </p>**
