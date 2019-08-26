@@ -10,6 +10,11 @@ SUBTITLES_DIR="subtitles"
 DIR_CHUNK=1000
 COUNTER_FILE="counter.txt"
 REPORTING_URL="http://127.0.0.1:8000/api/v1/video"
+QUALITY=(1080 720 480 360)
+Q1080=('1080' '9000k' '4500k')
+Q720=('720' '5000k' '2500k')
+Q480=('480' '2500k' '1250k')
+Q360=('360' '1500k' '700k')
 
 # check programs
 if [[ -z "$(which ffmpeg)" ]]; then
@@ -96,11 +101,23 @@ for f in ${TARGET_FILES}; do
       AUDIO_FILES+="${FILE_NAME}_audio_$i.m4a "
     done
 
-    ffmpeg -hide_banner -y -i "${MP4}" \
-      -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 4500k -bufsize 9000k -pix_fmt yuv420p -vf "scale=-2:1080" -f mp4 "${FILE_NAME}_1080.mp4" \
-      -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 2500k -bufsize 5000k -pix_fmt yuv420p -vf "scale=-2:720" -f mp4 "${FILE_NAME}_720.mp4" \
-      -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 1250k -bufsize 2500k -pix_fmt yuv420p -vf "scale=-2:480" -f mp4 "${FILE_NAME}_480.mp4" \
-      -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 -maxrate 700k -bufsize 1500k -pix_fmt yuv420p -vf "scale=-2:360" -f mp4 "${FILE_NAME}_360.mp4"
+    HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=nw=1:nk=1 ${MP4})
+
+    for q in "${QUALITY[@]}"; do
+      if [[ ! HEIGHT > q ]]; then
+        SCALE=Q$q[0]
+        SCALE=${!SCALE}
+        BUFFER=Q$q[1]
+        BUFFER=${!BUFFER}
+        BITRATE=Q$q[2]
+        BITRATE=${!BITRATE}
+
+        ffmpeg -hide_banner -y -i "${MP4}" \
+          -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 \
+          -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 \
+          -maxrate ${BITRATE} -bufsize ${BUFFER} -pix_fmt yuv420p -vf "scale=-2:${SCALE}" -f mp4 "${FILE_NAME}_${SCALE}.mp4"
+      fi
+    done
 
     MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES} -out "${DASH_DIR}/${FILE_NAME}.mpd"
     rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES}
