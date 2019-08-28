@@ -1,32 +1,39 @@
-# MPEG-Dash Stream Generator Service
+# MPEG-Dash Generator Script
 
-This script converts every mp4 (in the current) to a multi-bitrate video in mp4-dash
-For each file "videoname.mp4", rename it based on file counter and creates a folder containing a dash manifest file "stream.mpd" and subfolders containing video segments.
-Also, make thumbnails for every mp4 files that previously converted to dash playlist
+This script converts MP4 video files to multi-bitrate videos based on MPEG-DASH, is an adaptive bitrate streaming technique that enables high quality streaming of media content over the Internet delivered from conventional HTTP web servers.
 
-# Requirement
+## Features
+* Generate MPEG-DASH manifest file (MPD)
+* Generate multi-bitrate videos
+* Generate multiple audio channels
+* Generate video thumbnails
+* Generate VTT subtitles
+* Send processed video info to third-party service by cURL
+
+## Requirement
 * ffmpeg
 * gpac
-* imagemagick
+* imagemagick (montage)
 * sed
 * curl
 
-**Install requirements:**
-
-`sudo apt install ffmpeg gpac montage sed curl`
-
-# Convert to MPEG-Dash
-**<p>First make bash script executable:</p>**
+## Convert to MPEG-Dash
+**<p>1. First make bash script executable:</p>**
 `$ sudo chmod +x dash.sh`
 
-**<p>Then run the script: </p>**
-`$ ./dash.sh`
-
-# Convert video file to MP4
-**<p>Run this command:</p>**
+**<p>2. Move your MP4 video files to the root of the project. Note that the file names are without spaces. If your file is not a MP4 video format (e.g. MKV file), convert it using the following command:</p>**
 `$ ffmpeg -i file.mkv -map_chapters -1 -map 0:v -map 0:a -c:v copy -c:a copy -sn file.mp4`
 
-# MIME-TYPES Support
+**<p>3. Put your SRT subtitle files with the same name as the video file and in the following format next to the video (Optional):</p>**
+````
+{VIDEO_NAME}_{LANG}.srt
+e.g. movie_EN.srt
+````
+
+**<p>4. Then run the script: </p>**
+`$ ./dash.sh`
+
+### MIME-TYPES Support
 **<p>Add the following mime-types to .htaccess:</p>**
 `AddType video/mp4 m4s `<br>
 `AddType application/dash+xml mpd`

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# BASH_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 MOVIE_DIR=$(pwd)
 THUMBS_DIR="thumbs"
 QUEUE_DIR="queue"
@@ -9,7 +8,7 @@ REPORTED_DIR="reported"
 SUBTITLES_DIR="subtitles"
 DIR_CHUNK=1000
 COUNTER_FILE="counter.txt"
-REPORTING_URL="http://127.0.0.1:8000/api/v1/video"
+REPORTING_URL="http://127.0.0.1:8000"
 QUALITY=(1080 720 480 360)
 Q1080=('1080' '9000k' '4500k')
 Q720=('720' '5000k' '2500k')
@@ -18,27 +17,27 @@ Q360=('360' '1500k' '700k')
 
 # check programs
 if [[ -z "$(which ffmpeg)" ]]; then
-  echo "Error: ffmpeg is not installed"
+  echo "Exception: ffmpeg is not installed"
   exit 1
 fi
 
 if [[ -z "$(which MP4Box)" ]]; then
-  echo "Error: MP4Box is not installed"
+  echo "Exception: MP4Box is not installed"
   exit 1
 fi
 
 if [[ -z "$(which montage)" ]]; then
-  echo "Error: montage is not installed"
+  echo "Exception: montage is not installed"
   exit 1
 fi
 
 if [[ -z "$(which sed)" ]]; then
-  echo "Error: sed is not installed"
+  echo "Exception: sed is not installed"
   exit 1
 fi
 
 if [[ -z "$(which curl)" ]]; then
-  echo "Error: curl is not installed"
+  echo "Exception: curl is not installed"
   exit 1
 fi
 
@@ -81,7 +80,7 @@ for f in ${TARGET_FILES}; do
   MP4="${QUEUE_DIR}/${FILE_NAME}.mp4"
   DASH_DIR="${QUEUE_DIR}/${FILE_NAME}"
 
-  # if DASH directory does not exist, convert
+  # if DASH directory does not exist then convert
   if [[ ! -d "${DASH_DIR}" ]]; then
     mkdir "${DASH_DIR}"
 
@@ -92,7 +91,7 @@ for f in ${TARGET_FILES}; do
     mv "${f}" "${QUEUE_DIR}/${FILE_NAME}.mp4"
     echo "Converting \"$f\" to multi-bitrate video in MPEG-DASH"
 
-    # count audio channels
+    # audio channels count
     AUDIO_CHANNELS=$(ffmpeg -i "${MP4}" 2>&1 | grep Audio | wc -l)
     AUDIO_FILES=""
 
@@ -102,6 +101,7 @@ for f in ${TARGET_FILES}; do
     done
 
     HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of default=nw=1:nk=1 ${MP4})
+    VIDEO_FILES=""
 
     for q in "${QUALITY[@]}"; do
       if [[ ! HEIGHT > q ]]; then
@@ -113,19 +113,19 @@ for f in ${TARGET_FILES}; do
         BITRATE=${!BITRATE}
 
         ffmpeg -hide_banner -y -i "${MP4}" \
-          -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 \
+          -preset ultrafast -tune film -vsync passthrough -write_tmcd 0 -an -c:v libx264 -profile:v main \
           -x264opts 'keyint=25:min-keyint=25:no-scenecut' -crf 23 \
           -maxrate ${BITRATE} -bufsize ${BUFFER} -pix_fmt yuv420p -vf "scale=-2:${SCALE}" -f mp4 "${FILE_NAME}_${SCALE}.mp4"
+
+        VIDEO_FILES+="${FILE_NAME}_${SCALE}.mp4 "
       fi
     done
 
-    MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES} -out "${DASH_DIR}/${FILE_NAME}.mpd"
-    rm "${FILE_NAME}_1080.mp4" "${FILE_NAME}_720.mp4" "${FILE_NAME}_480.mp4" "${FILE_NAME}_360.mp4" ${AUDIO_FILES}
+    MP4Box -dash 2000 -rap -frag-rap -bs-switching no -profile "dashavc264:live" ${VIDEO_FILES} ${AUDIO_FILES} -out "${DASH_DIR}/${FILE_NAME}.mpd"
+    rm ${VIDEO_FILES} ${AUDIO_FILES}
   fi
 
-  # TODO: CHECK THAT LAST CHUNK HAS MORE THAN 0 BYTE
-
-  # if thumbs directory does not exist, make thumbs
+  # if thumbs directory does not exist then make thumbs
   if [[ ! -d "${DASH_DIR}/${THUMBS_DIR}" ]]; then
     mkdir "${DASH_DIR}/${THUMBS_DIR}"
     echo "Making thumbnails for \"$f\""
@@ -142,7 +142,7 @@ for f in ${TARGET_FILES}; do
 
   for subtitle in ${SUB_FILES}; do
     SUBTITLE_NAME="${subtitle%.*}" # name without extension
-    # get last two char of srt file as subtitle language (based on default condition)
+    # get last two char of srt file as subtitle language (based on default convention, e.g. movie_EN.srt)
     SUB_LANG=${SUBTITLE_NAME:(-2)}
     # convert srt to vtt
     ffmpeg -i "${subtitle}" "${FILE_NAME}_${SUB_LANG}.vtt"
@@ -160,7 +160,7 @@ for f in ${TARGET_FILES}; do
   if [[ -f "${DASH_DIR}/${THUMBS_DIR}/preview.jpg" ]]; then
     mv "${DASH_DIR}" "${PROCESSED_DIR}"
     mv "${MP4}" "${PROCESSED_DIR}"
-    #    rm "${MP4}"
+    rm "${MP4}"
     COUNTER=$((COUNTER + 1))
     echo ${COUNTER} >"${COUNTER_FILE}"
 
@@ -173,8 +173,8 @@ for f in ${TARGET_FILES}; do
       --url ${REPORTING_URL} \
       --output "${PROCESSED_DIR}/${FILE_NAME}/response.txt" -w "%{http_code}")
 
-    # if response header code is 201, move to reported directory
-    if [[ "$STATUS" -eq 201 ]]; then
+    # if response header code is 200, move to reported directory
+    if [[ "$STATUS" -eq 200 ]]; then
       mv "${PROCESSED_DIR}/${FILE_NAME}" "${REPORTED_DIR}/${SAVE_DIR}"
       mv "${PROCESSED_DIR}/${FILE_NAME}.mp4" "${REPORTED_DIR}/${SAVE_DIR}"
     fi
